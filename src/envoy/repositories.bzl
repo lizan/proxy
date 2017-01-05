@@ -628,7 +628,8 @@ cc_test(
 
     native.new_git_repository(
         name = "envoy_git",
-        remote = "https://github.com/lyft/envoy.git",
-        commit = "6b1336a786ebe56c45a1a349ddf706e0526c1ec1", # 2017-01-03
+#        path = "/home/zlizan/github/lizan/envoy",
+        remote = "https://github.com/lizan/envoy.git",
+        commit = "9c42b8771fa23b4bff1ba0d9c1571fa66aa1e55a", # lizan-dev
         build_file_content = BUILD,
     )

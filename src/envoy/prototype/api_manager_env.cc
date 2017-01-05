@@ -191,6 +191,28 @@ class GrpcRequestCallbacks : public AsyncClient::Callbacks {
   }
 };
 
+void GrpcStreamingRequestCallbacks::onHeaders(HeaderMapPtr &&headers, bool end_stream) {
+  env_->LogDebug("grpc streaming request: on headers");
+}
+void GrpcStreamingRequestCallbacks::onData(Buffer::Instance &data, bool end_stream) {
+  env_->LogDebug("grpc streaming request: on data");
+  data.drain(5);
+  auto length = data.length();
+  request_->OnComplete(Status::OK, std::string(reinterpret_cast<const char *>(data.linearize(length)), length));
+  request_.reset();
+}
+void GrpcStreamingRequestCallbacks::onTrailers(HeaderMapPtr &&trailers) {
+  env_->LogDebug("grpc streaming request: on trailers");
+}
+void GrpcStreamingRequestCallbacks::onResetStream() {
+  env_->LogDebug("grpc streaming request: on reset");
+}
+void GrpcStreamingRequestCallbacks::sendGRPCRequest(std::unique_ptr<google::api_manager::GRPCRequest> request) {
+  request_.swap(request);
+  auto body = SerializeGrpcBody(request_->body());
+  underlying_request_->sendData(*body, false);
+}
+
 void Env::RunHTTPRequest(
     std::unique_ptr<google::api_manager::HTTPRequest> request) {
   auto &client = cm_.httpAsyncClientForCluster("api_manager");
@@ -205,15 +227,17 @@ void Env::RunHTTPRequest(
 
 void Env::RunGRPCRequest(
     std::unique_ptr<google::api_manager::GRPCRequest> request) {
-  auto &client = cm_.httpAsyncClientForCluster(request->server());
-
-  Http::MessagePtr message =
-      PrepareGrpcHeaders("localhost", request->service(), request->method());
-  message->body(SerializeGrpcBody(request->body()));
-  auto callbacks = new GrpcRequestCallbacks(this, std::move(request));
-  client.send(
-      std::move(message), *callbacks,
-      Optional<std::chrono::milliseconds>(std::chrono::milliseconds(10000)));
+  if (streaming_callbacks_ == nullptr) {
+    auto &client = cm_.httpAsyncClientForCluster(request->server());
+    Http::MessagePtr message =
+        PrepareGrpcHeaders("localhost", request->service(), request->method());
+    streaming_callbacks_.reset(new GrpcStreamingRequestCallbacks(this, message->headers()));
+    auto request = client.start(*streaming_callbacks_, Optional<std::chrono::milliseconds>(std::chrono::milliseconds(10000)));
+    streaming_callbacks_->set_request(request);
+    request->sendHeaders(streaming_callbacks_->headers(), false);
+  }
+  LogDebug(fmt::format("Sending request to {}", request->method()));
+  streaming_callbacks_->sendGRPCRequest(std::move(request));
 }
 }
 }

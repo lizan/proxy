@@ -247,9 +247,9 @@ class Instance : public Http::StreamFilter,
   // note: cannot extend ~ActiveStream for access log, placing it here
   ~Instance() {
     log().debug("Called ApiManager::Instance : {}", __func__);
-    std::unique_ptr<google::api_manager::Response> response(new Response());
-    request_handler_->Report(std::move(response),
-                             [this]() { log().debug("Report returns"); });
+//    std::unique_ptr<google::api_manager::Response> response(new Response());
+//    request_handler_->Report(std::move(response),
+//                             [this]() { log().debug("Report returns"); });
   }
 };
 }
